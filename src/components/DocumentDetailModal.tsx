@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import { useDocTrack } from '../context/DocTrackContext';
 import { QRCodeDisplay } from './QRCodeDisplay';
 import { 
@@ -22,11 +22,15 @@ import {
   ShieldCheck,
   PauseCircle,
   XCircle,
-  RotateCcw
+  RotateCcw,
+  Upload,
+  FolderOpen,
+  Eye,
+  Trash2
 } from 'lucide-react';
 import { DEPARTMENTS, CLASSIFICATION_RULES } from '../data/mockData';
 import { DepartmentCode } from '../types';
-import { formatDate, getSLACountdownText, getSLAStatus } from '../utils/helpers';
+import { formatDate, getSLACountdownText, getSLAStatus, formatBytes, getFileTypeDetails } from '../utils/helpers';
 
 export const DocumentDetailModal: React.FC = () => {
   const { 
@@ -40,9 +44,12 @@ export const DocumentDetailModal: React.FC = () => {
     disapproveDocument,
     putOnHold,
     completeDocument,
+    addAttachmentsToDocument,
     setRoutingSlipDocId,
     addToast
   } = useDocTrack();
+
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const [activeTab, setActiveTab] = useState<'timeline' | 'actions' | 'audit' | 'files'>('timeline');
   
@@ -52,7 +59,66 @@ export const DocumentDetailModal: React.FC = () => {
   const [citizenInstructions, setCitizenInstructions] = useState('');
   const [actionSubmitting, setActionSubmitting] = useState(false);
 
+  // File upload state in detail modal
+  const [isDragging, setIsDragging] = useState(false);
+  const [previewFile, setPreviewFile] = useState<{ name: string; size: string; type: string; url?: string } | null>(null);
+
   if (!selectedDoc) return null;
+
+  const processIncomingFiles = (incomingFiles: FileList | File[]) => {
+    const filesArray = Array.from(incomingFiles);
+    if (filesArray.length === 0 || !selectedDoc) return;
+
+    const newAttachments = filesArray.map(file => {
+      let objectUrl: string | undefined;
+      try {
+        objectUrl = URL.createObjectURL(file);
+      } catch {
+        // Fallback
+      }
+
+      return {
+        name: file.name,
+        size: formatBytes(file.size),
+        type: file.type || 'application/octet-stream',
+        url: objectUrl
+      };
+    });
+
+    addAttachmentsToDocument(selectedDoc.id, newAttachments);
+  };
+
+  const handleFileInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files && e.target.files.length > 0) {
+      processIncomingFiles(e.target.files);
+      e.target.value = '';
+    }
+  };
+
+  const handleDragOver = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDragging(true);
+  };
+
+  const handleDragLeave = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDragging(false);
+  };
+
+  const handleDrop = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDragging(false);
+    if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
+      processIncomingFiles(e.dataTransfer.files);
+    }
+  };
+
+  const handleBrowseFolderClick = () => {
+    fileInputRef.current?.click();
+  };
 
   const rule = CLASSIFICATION_RULES[selectedDoc.classification];
   const slaStatus = getSLAStatus(selectedDoc);
@@ -575,46 +641,100 @@ export const DocumentDetailModal: React.FC = () => {
 
           {/* TAB 4: ATTACHMENTS */}
           {activeTab === 'files' && (
-            <div className="space-y-4">
+            <div className="space-y-5">
               <div className="flex items-center justify-between text-xs">
-                <h4 className="font-bold uppercase tracking-wider text-slate-600">
-                  Uploaded Accompanying Documents & Exhibits
-                </h4>
-                <span className="text-slate-400 text-[11px]">
+                <div>
+                  <h4 className="font-bold uppercase tracking-wider text-slate-700">
+                    Accompanying Documents & Official Exhibits
+                  </h4>
+                  <p className="text-[11px] text-slate-500">
+                    Statutory attachments, endorsements, clearances, and compliance files
+                  </p>
+                </div>
+                <span className="text-slate-500 font-medium text-[11px] bg-slate-100 px-2.5 py-1 rounded-full border border-slate-200">
                   {selectedDoc.attachments.length} files attached
                 </span>
               </div>
 
+              {/* Upload New Attachment Zone */}
+              <div>
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  multiple
+                  onChange={handleFileInputChange}
+                  className="hidden"
+                  id="detail-file-upload-input"
+                  aria-label="Upload document attachments"
+                />
+
+                <div
+                  onDragOver={handleDragOver}
+                  onDragLeave={handleDragLeave}
+                  onDrop={handleDrop}
+                  onClick={handleBrowseFolderClick}
+                  role="button"
+                  tabIndex={0}
+                  onKeyDown={e => {
+                    if (e.key === 'Enter' || e.key === ' ') {
+                      e.preventDefault();
+                      fileInputRef.current?.click();
+                    }
+                  }}
+                  className={`p-4 border-2 border-dashed rounded-xl text-center cursor-pointer transition-all ${
+                    isDragging
+                      ? 'border-blue-700 bg-blue-50 ring-4 ring-blue-100'
+                      : 'border-slate-300 hover:border-blue-600 hover:bg-slate-50/80 bg-slate-50/50'
+                  }`}
+                >
+                  <div className="w-9 h-9 mx-auto rounded-full bg-blue-100 text-blue-900 flex items-center justify-center mb-1.5 shadow-2xs">
+                    <Upload className="w-4 h-4" />
+                  </div>
+                  <div className="font-bold text-slate-800 text-xs">
+                    Click to browse folder or drag and drop any file here
+                  </div>
+                  <div className="text-[10px] text-slate-500 mt-0.5">
+                    Supports Word (.docx, .doc), PDF, Excel (.xlsx, .xls, .csv), Images (.jpg, .png), Text, Zip, and other formats
+                  </div>
+                </div>
+              </div>
+
+              {/* Attachments List */}
               {selectedDoc.attachments.length === 0 ? (
                 <div className="p-8 text-center text-xs text-slate-400 border border-dashed rounded-xl">
-                  No electronic attachments logged.
+                  No electronic attachments logged yet. Upload files above to attach to this transaction.
                 </div>
               ) : (
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                  {selectedDoc.attachments.map((file, i) => (
-                    <div
-                      key={i}
-                      className="p-3.5 bg-slate-50 rounded-xl border border-slate-200 flex items-center justify-between gap-3 text-xs"
-                    >
-                      <div className="flex items-center gap-2.5 min-w-0">
-                        <div className="w-9 h-9 rounded-lg bg-blue-100 text-blue-900 flex items-center justify-center shrink-0">
-                          <Paperclip className="w-4 h-4" />
-                        </div>
-                        <div className="min-w-0">
-                          <div className="font-semibold text-slate-900 truncate" title={file.name}>
-                            {file.name}
-                          </div>
-                          <div className="text-[11px] text-slate-500">{file.size} • Verified Valid</div>
-                        </div>
-                      </div>
-                      <button
-                        onClick={() => addToast(`Opening preview for ${file.name}...`, 'info')}
-                        className="px-2.5 py-1 text-xs bg-white hover:bg-slate-100 text-blue-900 font-semibold border border-slate-300 rounded-md shrink-0 cursor-pointer"
+                  {selectedDoc.attachments.map((file, i) => {
+                    const typeInfo = getFileTypeDetails(file.name, file.type);
+                    return (
+                      <div
+                        key={i}
+                        className="p-3 bg-white rounded-xl border border-slate-200 flex items-center justify-between gap-3 text-xs shadow-2xs hover:border-slate-300 transition-colors"
                       >
-                        View
-                      </button>
-                    </div>
-                  ))}
+                        <div className="flex items-center gap-2.5 min-w-0 flex-1">
+                          <span className={`px-2 py-0.5 rounded-md text-[10px] font-bold uppercase tracking-wider border shrink-0 ${typeInfo.badgeColor}`}>
+                            {typeInfo.badge}
+                          </span>
+                          <div className="min-w-0 flex-1">
+                            <div className="font-semibold text-slate-900 truncate" title={file.name}>
+                              {file.name}
+                            </div>
+                            <div className="text-[10px] text-slate-500">{file.size} • Verified Archive</div>
+                          </div>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => setPreviewFile(file)}
+                          className="px-2.5 py-1 text-xs bg-slate-50 hover:bg-blue-50 hover:text-blue-900 text-slate-700 font-semibold border border-slate-200 rounded-md shrink-0 transition-colors cursor-pointer flex items-center gap-1"
+                        >
+                          <Eye className="w-3.5 h-3.5" />
+                          <span>View</span>
+                        </button>
+                      </div>
+                    );
+                  })}
                 </div>
               )}
             </div>
@@ -634,6 +754,73 @@ export const DocumentDetailModal: React.FC = () => {
           </button>
         </div>
       </div>
+
+      {/* Quick Attachment Preview Modal */}
+      {previewFile && (
+        <div className="fixed inset-0 z-60 bg-slate-900/80 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl shadow-2xl border border-slate-200 max-w-lg w-full overflow-hidden flex flex-col">
+            <div className="bg-slate-900 text-white px-5 py-3 flex items-center justify-between">
+              <div className="flex items-center gap-2 min-w-0">
+                <Paperclip className="w-4 h-4 text-amber-300 shrink-0" />
+                <span className="font-bold text-xs truncate">{previewFile.name}</span>
+              </div>
+              <button
+                onClick={() => setPreviewFile(null)}
+                className="p-1 text-slate-400 hover:text-white rounded-lg cursor-pointer"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <div className="p-6 text-center">
+              {previewFile.type.startsWith('image/') && previewFile.url ? (
+                <div className="max-h-72 overflow-hidden rounded-xl border border-slate-200 bg-slate-50 mb-3 flex items-center justify-center">
+                  <img
+                    src={previewFile.url}
+                    alt={previewFile.name}
+                    className="max-h-72 w-auto object-contain"
+                  />
+                </div>
+              ) : (
+                <div className="p-8 rounded-xl bg-slate-50 border border-slate-200 mb-3 space-y-2">
+                  <div className="w-12 h-12 mx-auto rounded-xl bg-blue-100 text-blue-900 flex items-center justify-center font-bold">
+                    {getFileTypeDetails(previewFile.name, previewFile.type).badge}
+                  </div>
+                  <div className="font-bold text-sm text-slate-800">{previewFile.name}</div>
+                  <div className="text-xs text-slate-500">
+                    Size: {previewFile.size} • Format: {getFileTypeDetails(previewFile.name, previewFile.type).extension.toUpperCase()}
+                  </div>
+                  <div className="text-[11px] text-emerald-700 bg-emerald-50 py-1 px-3 rounded-md inline-block font-semibold">
+                    Document verified under RA 11032 compliance log
+                  </div>
+                </div>
+              )}
+
+              {previewFile.url && (
+                <a
+                  href={previewFile.url}
+                  download={previewFile.name}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="inline-flex items-center gap-1.5 px-4 py-2 bg-blue-900 hover:bg-blue-800 text-white rounded-xl text-xs font-bold transition-colors cursor-pointer"
+                >
+                  <Upload className="w-3.5 h-3.5 rotate-180" />
+                  <span>Download / Open Original File</span>
+                </a>
+              )}
+            </div>
+
+            <div className="bg-slate-50 px-5 py-2.5 border-t border-slate-200 flex justify-end">
+              <button
+                onClick={() => setPreviewFile(null)}
+                className="px-4 py-1.5 bg-slate-200 hover:bg-slate-300 text-slate-800 rounded-lg text-xs font-semibold cursor-pointer"
+              >
+                Close Preview
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

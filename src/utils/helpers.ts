@@ -109,6 +109,88 @@ export function formatDate(dateString: string): string {
   }
 }
 
+export function formatBytes(bytes: number, decimals = 1): string {
+  if (bytes === 0) return '0 B';
+  const k = 1024;
+  const dm = decimals < 0 ? 0 : decimals;
+  const sizes = ['B', 'KB', 'MB', 'GB', 'TB'];
+  const i = Math.floor(Math.log(bytes) / Math.log(k));
+  return `${parseFloat((bytes / Math.pow(k, i)).toFixed(dm))} ${sizes[i]}`;
+}
+
+export interface FileTypeInfo {
+  badge: string;
+  extension: string;
+  category: 'pdf' | 'word' | 'excel' | 'image' | 'archive' | 'text' | 'generic';
+  badgeColor: string; // Tailwind classes
+}
+
+export function getFileTypeDetails(fileName: string, mimeType?: string): FileTypeInfo {
+  const ext = fileName.split('.').pop()?.toLowerCase() || '';
+  const mime = mimeType?.toLowerCase() || '';
+
+  if (ext === 'pdf' || mime.includes('pdf')) {
+    return {
+      badge: 'PDF',
+      extension: ext || 'pdf',
+      category: 'pdf',
+      badgeColor: 'bg-red-100 text-red-700 border-red-200'
+    };
+  }
+
+  if (['doc', 'docx', 'dot', 'dotx', 'odt', 'rtf'].includes(ext) || mime.includes('word') || mime.includes('document')) {
+    return {
+      badge: ext.toUpperCase() || 'DOCX',
+      extension: ext || 'docx',
+      category: 'word',
+      badgeColor: 'bg-blue-100 text-blue-700 border-blue-200'
+    };
+  }
+
+  if (['xls', 'xlsx', 'csv', 'ods', 'tsv'].includes(ext) || mime.includes('excel') || mime.includes('spreadsheet') || mime.includes('csv')) {
+    return {
+      badge: ext.toUpperCase() || 'XLSX',
+      extension: ext || 'xlsx',
+      category: 'excel',
+      badgeColor: 'bg-emerald-100 text-emerald-700 border-emerald-200'
+    };
+  }
+
+  if (['jpg', 'jpeg', 'png', 'webp', 'gif', 'svg', 'bmp', 'tiff'].includes(ext) || mime.startsWith('image/')) {
+    return {
+      badge: ext.toUpperCase() || 'IMG',
+      extension: ext || 'image',
+      category: 'image',
+      badgeColor: 'bg-amber-100 text-amber-700 border-amber-200'
+    };
+  }
+
+  if (['zip', 'rar', '7z', 'tar', 'gz'].includes(ext) || mime.includes('zip') || mime.includes('compressed')) {
+    return {
+      badge: ext.toUpperCase() || 'ZIP',
+      extension: ext || 'zip',
+      category: 'archive',
+      badgeColor: 'bg-purple-100 text-purple-700 border-purple-200'
+    };
+  }
+
+  if (['txt', 'log', 'md'].includes(ext) || mime.startsWith('text/')) {
+    return {
+      badge: ext.toUpperCase() || 'TXT',
+      extension: ext || 'txt',
+      category: 'text',
+      badgeColor: 'bg-slate-100 text-slate-700 border-slate-200'
+    };
+  }
+
+  return {
+    badge: ext ? ext.toUpperCase().slice(0, 4) : 'FILE',
+    extension: ext || 'file',
+    category: 'generic',
+    badgeColor: 'bg-slate-100 text-slate-700 border-slate-200'
+  };
+}
+
 export function exportToCSV(filename: string, rows: Record<string, any>[]) {
   if (!rows || !rows.length) return;
   const separator = ',';

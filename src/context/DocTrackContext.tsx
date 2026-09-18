@@ -48,6 +48,7 @@ interface DocTrackContextType {
   disapproveDocument: (docId: string, remarks: string) => void;
   putOnHold: (docId: string, remarks: string, citizenAction?: string) => void;
   completeDocument: (docId: string, remarks: string) => void;
+  addAttachmentsToDocument: (docId: string, newFiles: Array<{ name: string; size: string; type: string; url?: string }>) => void;
   markNotificationAsRead: (id: string) => void;
   clearNotifications: () => void;
   resetToMockData: () => void;
@@ -540,6 +541,43 @@ export const DocTrackProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     addToast(`Document ${docId} successfully marked as Completed / Released!`, 'success');
   };
 
+  const addAttachmentsToDocument = (
+    docId: string,
+    newFiles: Array<{ name: string; size: string; type: string; url?: string }>
+  ) => {
+    const officer = DEPARTMENTS[activeDepartment]?.defaultActionOfficer || 'Authorized Officer';
+    setDocuments(prev =>
+      prev.map(doc => {
+        if (doc.id !== docId) return doc;
+
+        const newLog = {
+          id: `log-${Date.now()}`,
+          timestamp: new Date().toLocaleDateString('en-PH', {
+            year: 'numeric',
+            month: '2-digit',
+            day: '2-digit',
+            hour: '2-digit',
+            minute: '2-digit'
+          }),
+          office: activeDepartment,
+          officerName: officer,
+          officerRole: 'Document Custodian',
+          action: 'Action Taken' as const,
+          remarks: `Attached ${newFiles.length} supporting document(s): ${newFiles.map(f => f.name).join(', ')}`,
+          attachments: newFiles.map(f => f.name)
+        };
+
+        return {
+          ...doc,
+          attachments: [...doc.attachments, ...newFiles],
+          history: [...doc.history, newLog]
+        };
+      })
+    );
+
+    addToast(`Uploaded ${newFiles.length} file(s) to ${docId}`, 'success');
+  };
+
   const markNotificationAsRead = (id: string) => {
     setNotifications(prev => prev.map(n => (n.id === id ? { ...n, read: true } : n)));
   };
@@ -586,6 +624,7 @@ export const DocTrackProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         disapproveDocument,
         putOnHold,
         completeDocument,
+        addAttachmentsToDocument,
         markNotificationAsRead,
         clearNotifications,
         resetToMockData
