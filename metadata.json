@@ -1,0 +1,6 @@
+{
+  "name": "LGU e-DocTrack - Municipal Document Tracking System",
+  "description": "Philippine LGU Document Monitoring and Tracking System compliant with RA 11032 (Ease of Doing Business Act), featuring intake, QR routing slips, department action queues, SLA analytics, and citizen tracking.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
